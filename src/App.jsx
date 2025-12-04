@@ -3,14 +3,10 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, addDoc, serverTimestamp, getDoc } from 'firebase/firestore'; 
 
-// --- Icon Imports (using lucide-react, assumed available) ---
+
 import { Clock, CheckCircle, Circle, Calendar, List, Play, Pause, RotateCcw, Zap, Music, BarChart, X, Link, Save } from 'lucide-react';
 
-// =================================================================
-// 1. FIREBASE & AUTH SETUP (Mandatory Global Variables)
-// =================================================================
 
-// Hardcoded Firebase configuration provided by the user (used as a fallback if the environment doesn't inject __firebase_config)
 const HARDCODED_FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiuxg7AZ_A3lXGo86ZWROlSi4Oh4anQ8I",
   authDomain: "todoapp-36817.firebaseapp.com",
@@ -31,18 +27,12 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'minimal-todo-app';
 // Default focus music playlist, used if user hasn't saved a custom one
 const DEFAULT_YT_PLAYLIST = "https://www.youtube.com/embed/videoseries?list=PLQ_oFj9qU2sU99Uq-Wp6jC11l20NfX2P3";
 
-// =================================================================
-// 2. GEMINI API SETUP & HELPERS
-// =================================================================
 
-// Placeholder API Key - Canvas runtime will provide the actual key
 const GEMINI_API_KEY = "AIzaSyDqs3aABeGZBhRB2zwKZmYOsbyVqTleNtc";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
 
 
-/**
- * Executes a fetch request with exponential backoff for handling rate limits.
- */
+
 const fetchWithBackoff = async (url, options, maxRetries = 5) => {
     let delay = 1000;
     for (let i = 0; i < maxRetries; i++) {
@@ -67,9 +57,7 @@ const fetchWithBackoff = async (url, options, maxRetries = 5) => {
     }
 };
 
-// =================================================================
-// 3. CORE UTILITY FUNCTIONS
-// =================================================================
+
 
 // Pomodoro Timer Constants
 const WORK_TIME = 25 * 60; // 25 minutes in seconds
@@ -129,9 +117,6 @@ const getEmbedUrl = (url) => {
 };
 
 
-// =================================================================
-// 4. SEPARATE COMPONENTS
-// =================================================================
 
 /**
  * TaskCard Component
@@ -476,11 +461,6 @@ const App = () => {
   const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
   const [generationError, setGenerationError] = useState(null);
 
-
-  // =================================================================
-  // A. FIREBASE INITIALIZATION AND AUTHENTICATION
-  // =================================================================
-
   useEffect(() => {
     if (!firebaseConfig) return;
 
@@ -522,9 +502,6 @@ const App = () => {
     }
   }, []);
 
-  // =================================================================
-  // B. FIRESTORE REAL-TIME DATA SUBSCRIPTION & USER SETTINGS
-  // =================================================================
 
   // Load User Settings (specifically music URL)
   const loadUserSettings = useCallback(async (firestore, uid) => {
@@ -584,9 +561,6 @@ const App = () => {
     return () => unsubscribe();
   }, [db, userId, isAuthReady]);
 
-  // =================================================================
-  // C. TASK MANAGEMENT & GENERATION LOGIC
-  // =================================================================
 
   const addTask = async (title, scheduledDate) => {
     if (!db || !userId || !title.trim()) {
@@ -1069,9 +1043,7 @@ const App = () => {
   ), [customPlaylistUrl, embedUrl, inputUrl, isMusicSettingsOpen, saveMusicUrl]);
 
 
-  // =================================================================
-  // G. MAIN LAYOUT RENDER
-  // =================================================================
+
 
   const renderMainContent = () => {
     switch (viewMode) {
