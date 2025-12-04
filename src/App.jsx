@@ -10,15 +10,16 @@ import { Clock, CheckCircle, Circle, Calendar, List, Play, Pause, RotateCcw, Zap
 // 1. FIREBASE & AUTH SETUP (Mandatory Global Variables)
 // =================================================================
 
-// IMPORTANT: ALL sensitive keys here are now placeholders to ensure the file is safe for GitHub.
+// IMPORTANT: These are placeholders. They MUST be overridden by REACT_APP_FIREBASE_CONFIG 
+// on Vercel or __firebase_config in Canvas for the app to function.
 const HARDCODED_FIREBASE_CONFIG = {
-  apiKey: "YOUR_FIREBASE_API_KEY_PLACEHOLDER",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:23456789012:web:abcdefg12345",
-  measurementId: "G-XXXXXXXXXX"
+  apiKey: "", // Placeholder. Must be replaced by REACT_APP_FIREBASE_CONFIG in Vercel or __firebase_config in Canvas.
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+  measurementId: ""
 };
 
 // FIX: Prioritize Vercel's environment variable (REACT_APP_FIREBASE_CONFIG)
@@ -730,7 +731,8 @@ const App = () => {
   // =================================================================
 
   useEffect(() => {
-    if (!firebaseConfig || firebaseConfig.apiKey === HARDCODED_FIREBASE_CONFIG.apiKey) {
+    // Check if configuration is missing or using the empty placeholder values
+    if (!firebaseConfig || !firebaseConfig.apiKey) {
       console.error("Firebase config is missing or using placeholder values. Please set REACT_APP_FIREBASE_CONFIG on Vercel.");
       return;
     }
