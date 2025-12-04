@@ -3,10 +3,14 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, addDoc, serverTimestamp, getDoc } from 'firebase/firestore'; 
 
-
+// --- Icon Imports (using lucide-react, assumed available) ---
 import { Clock, CheckCircle, Circle, Calendar, List, Play, Pause, RotateCcw, Zap, Music, BarChart, X, Link, Save } from 'lucide-react';
 
+// =================================================================
+// 1. FIREBASE & AUTH SETUP (Mandatory Global Variables)
+// =================================================================
 
+// Hardcoded Firebase configuration provided by the user (used as a fallback if the environment doesn't inject __firebase_config)
 const HARDCODED_FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiuxg7AZ_A3lXGo86ZWROlSi4Oh4anQ8I",
   authDomain: "todoapp-36817.firebaseapp.com",
@@ -27,12 +31,18 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'minimal-todo-app';
 // Default focus music playlist, used if user hasn't saved a custom one
 const DEFAULT_YT_PLAYLIST = "https://www.youtube.com/embed/videoseries?list=PLQ_oFj9qU2sU99Uq-Wp6jC11l20NfX2P3";
 
+// =================================================================
+// 2. GEMINI API SETUP & HELPERS
+// =================================================================
 
-const GEMINI_API_KEY = "AIzaSyDqs3aABeGZBhRB2zwKZmYOsbyVqTleNtc";
+// Placeholder API Key - Canvas runtime will provide the actual key
+const GEMINI_API_KEY = ""; // Using empty string as instructed
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
 
 
-
+/**
+ * Executes a fetch request with exponential backoff for handling rate limits.
+ */
 const fetchWithBackoff = async (url, options, maxRetries = 5) => {
     let delay = 1000;
     for (let i = 0; i < maxRetries; i++) {
@@ -57,7 +67,9 @@ const fetchWithBackoff = async (url, options, maxRetries = 5) => {
     }
 };
 
-
+// =================================================================
+// 3. CORE UTILITY FUNCTIONS
+// =================================================================
 
 // Pomodoro Timer Constants
 const WORK_TIME = 25 * 60; // 25 minutes in seconds
@@ -74,7 +86,13 @@ const formatTime = (seconds) => {
 const formatDate = (date) => {
   if (!date) return '';
   try {
-    return date instanceof Date ? date.toISOString().split('T')[0] : date; // YYYY-MM-DD
+    if (!(date instanceof Date)) return date; 
+
+    // Use local date getters to prevent time zone issues 
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   } catch {
     return date;
   }
@@ -117,6 +135,9 @@ const getEmbedUrl = (url) => {
 };
 
 
+// =================================================================
+// 4. SEPARATE COMPONENTS
+// =================================================================
 
 /**
  * TaskCard Component
@@ -226,7 +247,7 @@ const Modal = React.memo(({ showModal, setShowModal, modalType, editingTask, new
 /**
  * PomodoroTimer Component
  */
-const PomodoroTimer = React.memo(({ sessionType, timeLeft, timerStatus, startTimer, pauseTimer, resetTimer, switchSession, sessionCount, getSessionDuration }) => {
+const PomodoroTimer = React.memo(({ sessionType, timeLeft, timerStatus, startTimer, pauseTimer, resetTimer, switchSession, sessionCount }) => {
     const sessionLabel = useMemo(() => {
         switch (sessionType) {
           case 'work': return 'Focus Time';
@@ -370,7 +391,7 @@ const TaskGeneratorForm = React.memo(({
     isGeneratingTasks, 
     generationError 
 }) => {
-    // FIX: Input state is now local to this component
+    // Input state is local to this component, guaranteeing stability against parent re-renders
     const [taskPrompt, setTaskPrompt] = useState('');
 
     const handleSubmit = (e) => {
@@ -389,7 +410,7 @@ const TaskGeneratorForm = React.memo(({
                 <input
                     type="text"
                     value={taskPrompt}
-                    // FIX: This onChange handler is now fully contained and controls only local state
+                    // This onChange handler controls only local state
                     onChange={(e) => setTaskPrompt(e.target.value)} 
                     placeholder="Enter a high-level goal (e.g., 'Plan a week-long trip to Japan' or 'Write a report on Q3 sales')"
                     className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 transition-colors"
@@ -423,415 +444,25 @@ const TaskGeneratorForm = React.memo(({
 
 
 // =================================================================
-// 5. MAIN APP COMPONENT
+// 5. EXTERNAL TODO LIST COMPONENT (Structural Fix)
 // =================================================================
 
-const App = () => {
-  // --- Global State ---
-  const [tasks, setTasks] = useState([]);
-  const [viewMode, setViewMode] = useState('tasks'); // 'tasks', 'calendar', 'stats'
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-
-  // --- Music State ---
-  const [customPlaylistUrl, setCustomPlaylistUrl] = useState(DEFAULT_YT_PLAYLIST);
-  const [inputUrl, setInputUrl] = useState('');
-  const [isMusicSettingsOpen, setIsMusicSettingsOpen] = useState(false);
-  
-  // Memoized embed URL for the iframe
-  const embedUrl = useMemo(() => getEmbedUrl(customPlaylistUrl), [customPlaylistUrl]);
-
-  // --- Pomodoro State ---
-  const [timerStatus, setTimerStatus] = useState('stopped'); // 'stopped', 'running', 'paused'
-  const [sessionType, setSessionType] = useState('work'); // 'work', 'short-break', 'long-break'
-  const [timeLeft, setTimeLeft] = useState(WORK_TIME);
-  const [sessionCount, setSessionCount] = useState(0);
-
-  // --- Task Input State ---
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskDate, setNewTaskDate] = useState(formatDate(new Date()));
-  const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState('add'); // 'add', 'edit'
-  const [editingTask, setEditingTask] = useState(null);
-
-  // --- NEW: Task Generation State ---
-  // Removed taskPrompt state from App to fix the typing issue.
-  const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
-  const [generationError, setGenerationError] = useState(null);
-
-  useEffect(() => {
-    if (!firebaseConfig) return;
-
-    try {
-      const app = initializeApp(firebaseConfig);
-      const firestore = getFirestore(app);
-      const authentication = getAuth(app);
-
-      setDb(firestore);
-      setAuth(authentication);
-
-      // 1. Sign in listener to get user ID
-      const unsubscribe = onAuthStateChanged(authentication, (user) => {
-        if (user) {
-          setUserId(user.uid);
-          // Once authenticated, load settings
-          loadUserSettings(firestore, user.uid);
-        } else {
-          if (!initialAuthToken) {
-            signInAnonymously(authentication).catch(console.error);
-          }
-        }
-        setIsAuthReady(true);
-      });
-
-      // 2. Custom Token Sign-In (runs once on load)
-      const attemptSignIn = async () => {
-        if (initialAuthToken) {
-          await signInWithCustomToken(authentication, initialAuthToken).catch(console.error);
-        } else if (!authentication.currentUser) {
-          await signInAnonymously(authentication).catch(console.error);
-        }
-      };
-      attemptSignIn();
-
-      return () => unsubscribe();
-    } catch (e) {
-      console.error("Firebase initialization failed:", e);
-    }
-  }, []);
-
-
-  // Load User Settings (specifically music URL)
-  const loadUserSettings = useCallback(async (firestore, uid) => {
-    try {
-        const settingsDocRef = doc(firestore, `artifacts/${appId}/users/${uid}/settings`, 'music');
-        const docSnap = await getDoc(settingsDocRef);
-        if (docSnap.exists()) {
-            const savedUrl = docSnap.data().youtubeUrl;
-            if (savedUrl) {
-                setCustomPlaylistUrl(savedUrl);
-                setInputUrl(savedUrl); // Initialize input field with saved value
-            }
-        }
-    } catch (e) {
-        console.error("Error loading user settings:", e);
-    }
-  }, []);
-
-  // Save Music URL Setting
-  const saveMusicUrl = async () => {
-    if (!db || !userId) return;
-    const urlToSave = getEmbedUrl(inputUrl) === DEFAULT_YT_PLAYLIST ? null : inputUrl; // Save null if using default or invalid URL
+/**
+ * TodoList Component (Moved outside App for rendering stability)
+ */
+const TodoList = React.memo(({ 
+    sortedTasks, 
+    stats, 
+    openAddModal, 
+    generateTasksFromPrompt, 
+    isGeneratingTasks, 
+    generationError,
+    toggleTaskCompleted,
+    openEditModal,
+    deleteTask
+}) => {
     
-    try {
-        const settingsDocRef = doc(db, `artifacts/${appId}/users/${userId}/settings`, 'music');
-        await setDoc(settingsDocRef, { youtubeUrl: urlToSave }, { merge: true });
-        // Update the customPlaylistUrl state to trigger iframe source update *once*
-        setCustomPlaylistUrl(urlToSave || DEFAULT_YT_PLAYLIST); 
-        setIsMusicSettingsOpen(false);
-        console.log("Music URL saved successfully.");
-    } catch (e) {
-        console.error("Error saving user settings:", e);
-    }
-  };
-
-
-  useEffect(() => {
-    if (!isAuthReady || !userId || !db) return;
-
-    const tasksCollectionPath = `artifacts/${appId}/users/${userId}/todos`;
-    const q = query(collection(db, tasksCollectionPath));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newTasks = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Convert Firestore timestamp to milliseconds if present, else null (for sorting)
-        createdAt: doc.data().createdAt?.toMillis() || 0,
-        completedAt: doc.data().completedAt?.toMillis() || null,
-      }));
-      setTasks(newTasks);
-      console.log(`Loaded ${newTasks.length} tasks for user ${userId}`);
-    }, (error) => {
-      console.error("Error fetching tasks:", error);
-    });
-
-    return () => unsubscribe();
-  }, [db, userId, isAuthReady]);
-
-
-  const addTask = async (title, scheduledDate) => {
-    if (!db || !userId || !title.trim()) {
-        console.error("AddTask Failed: Firestore DB not initialized or title empty.");
-        return;
-    }
-
-    try {
-      const tasksCollectionPath = `artifacts/${appId}/users/${userId}/todos`;
-      await addDoc(collection(db, tasksCollectionPath), {
-        title: title.trim(),
-        completed: false,
-        scheduledDate: scheduledDate,
-        createdAt: serverTimestamp(),
-      });
-      // console.log("Task added successfully.");
-    } catch (e) {
-      console.error("Error adding document: ", e);
-    }
-  };
-  
-  const addTasksBatch = async (taskArray) => {
-      if (!db || !userId) {
-          console.error("Batch Add Failed: DB or User ID not initialized.");
-          return;
-      }
-      const tasksCollectionPath = `artifacts/${appId}/users/${userId}/todos`;
-      
-      const batchPromises = taskArray.map(task => 
-          addDoc(collection(db, tasksCollectionPath), {
-              title: task.title.trim(),
-              completed: false,
-              // Use provided date or today's date if date is missing or invalid
-              scheduledDate: task.scheduledDate && task.scheduledDate.match(/^\d{4}-\d{2}-\d{2}$/) 
-                             ? task.scheduledDate 
-                             : '',
-              createdAt: serverTimestamp(),
-          })
-      );
-
-      try {
-          await Promise.all(batchPromises);
-          // console.log(`Successfully added ${taskArray.length} tasks in batch.`);
-      } catch (e) {
-          console.error("Error during batch task addition:", e);
-          throw new Error("Failed to save all generated tasks to the database.");
-      }
-  };
-  
-  const generateTasksFromPrompt = async (prompt) => {
-    if (!prompt.trim() || !db || !userId) return;
-
-    setIsGeneratingTasks(true);
-    setGenerationError(null);
-    // setTaskPrompt(''); // Removed this line as clearing is handled by the local component state
-
-    const systemPrompt = "You are an expert project manager and productivity assistant. Your task is to break down the user's high-level goal into 5 to 8 concrete, actionable, small, and distinct sub-tasks. For each task, provide a concise title (max 10 words) and an optional scheduled date in YYYY-MM-DD format, or an empty string if a date is not applicable. Respond ONLY with the JSON array of tasks.";
-
-    const payload = {
-      contents: [{ parts: [{ text: prompt }] }],
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      // FIX: Changed 'config' to 'generationConfig' to resolve 400 error
-      generationConfig: { 
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "ARRAY",
-          description: "A list of actionable tasks derived from the user's prompt.",
-          items: {
-            type: "OBJECT",
-            properties: {
-              title: { type: "STRING", description: "Concise title for the task (max 10 words)." },
-              scheduledDate: { type: "STRING", description: "Optional schedule date in YYYY-MM-DD format, or empty string." }
-            },
-            required: ["title"],
-            propertyOrdering: ["title", "scheduledDate"]
-          }
-        }
-      }
-    };
-
-    try {
-      const response = await fetchWithBackoff(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json();
-      const generatedJsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!generatedJsonText) {
-          throw new Error("Gemini returned no content or an invalid structure.");
-      }
-
-      // 1. Parse JSON
-      const generatedTasks = JSON.parse(generatedJsonText);
-
-      // 2. Validate and Save Tasks
-      if (Array.isArray(generatedTasks) && generatedTasks.length > 0) {
-        // Simple validation: ensure each item has a title
-        const validTasks = generatedTasks.filter(t => t.title && typeof t.title === 'string');
-        if (validTasks.length > 0) {
-            await addTasksBatch(validTasks);
-        } else {
-            throw new Error("Generated tasks were empty or invalid after parsing.");
-        }
-      } else {
-        throw new Error("Gemini response did not contain a valid array of tasks.");
-      }
-
-    } catch (e) {
-      console.error("Task generation failed:", e);
-      setGenerationError(e.message || "Failed to generate tasks. Please try again.");
-    } finally {
-      setIsGeneratingTasks(false);
-    }
-  };
-
-
-  const updateTask = async (taskId, newTitle, newScheduledDate) => {
-    if (!db || !userId || !taskId) return;
-
-    try {
-      const tasksDocPath = `artifacts/${appId}/users/${userId}/todos/${taskId}`;
-      await updateDoc(doc(db, tasksDocPath), {
-        title: newTitle.trim(),
-        scheduledDate: newScheduledDate,
-      });
-      setShowModal(false);
-      setEditingTask(null);
-    } catch (e) {
-      console.error("Error updating document: ", e);
-    }
-  };
-
-  const toggleTaskCompleted = async (taskId, currentStatus) => {
-    if (!db || !userId || !taskId) return;
-
-    try {
-      const tasksDocPath = `artifacts/${appId}/users/${userId}/todos/${taskId}`;
-      await updateDoc(doc(db, tasksDocPath), {
-        completed: !currentStatus,
-        completedAt: !currentStatus ? serverTimestamp() : null
-      });
-    } catch (e) {
-      console.error("Error toggling task status: ", e);
-    }
-  };
-
-  const deleteTask = async (taskId) => {
-    if (!db || !userId || !taskId) return;
-
-    try {
-      const tasksDocPath = `artifacts/${appId}/users/${userId}/todos/${taskId}`;
-      await deleteDoc(doc(db, tasksDocPath));
-    } catch (e) {
-      console.error("Error deleting document: ", e);
-    }
-  };
-
-  const handleModalSubmit = (e) => {
-    e.preventDefault();
-    if (modalType === 'add') {
-      addTask(newTaskTitle, newTaskDate);
-    } else if (modalType === 'edit' && editingTask) {
-      updateTask(editingTask.id, newTaskTitle, newTaskDate);
-    }
-  };
-
-  const openAddModal = () => {
-    setModalType('add');
-    setNewTaskTitle('');
-    setNewTaskDate(formatDate(new Date()));
-    setEditingTask(null);
-    setShowModal(true);
-  };
-
-  const openEditModal = (task) => {
-    setModalType('edit');
-    setNewTaskTitle(task.title);
-    // Ensure date is valid for input type="date"
-    setNewTaskDate(task.scheduledDate || formatDate(new Date())); 
-    setEditingTask(task);
-    setShowModal(true);
-  };
-
-  // =================================================================
-  // D. POMODORO TIMER LOGIC
-  // =================================================================
-
-  const getSessionDuration = useCallback((type) => {
-    switch (type) {
-      case 'work': return WORK_TIME;
-      case 'short-break': return SHORT_BREAK;
-      case 'long-break': return LONG_BREAK;
-      default: return WORK_TIME;
-    }
-  }, []);
-
-  const startTimer = () => setTimerStatus('running');
-  const pauseTimer = () => setTimerStatus('paused');
-
-  const resetTimer = useCallback(() => {
-    setTimerStatus('stopped');
-    setTimeLeft(getSessionDuration(sessionType));
-  }, [sessionType, getSessionDuration]);
-
-  const switchSession = useCallback(() => {
-    let nextType;
-    let nextCount = sessionCount;
-
-    if (sessionType === 'work') {
-      nextCount++;
-      if (nextCount % CYCLE_LENGTH === 0) {
-        nextType = 'long-break';
-      } else {
-        nextType = 'short-break';
-      }
-    } else {
-      nextType = 'work';
-    }
-
-    setSessionType(nextType);
-    setSessionCount(nextCount);
-    setTimeLeft(getSessionDuration(nextType));
-    setTimerStatus('stopped');
-  }, [sessionType, sessionCount, getSessionDuration]);
-
-
-  useEffect(() => {
-    if (timerStatus === 'running') {
-      const interval = setInterval(() => {
-        setTimeLeft((prevTime) => {
-          if (prevTime <= 1) {
-            switchSession();
-            return 0;
-          }
-          return prevTime - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [timerStatus, switchSession]);
-
-  // =================================================================
-  // E. STATS CALCULATION
-  // =================================================================
-
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter(t => t.completed).length;
-    const pending = total - completed;
-    const scheduled = tasks.filter(t => t.scheduledDate).length;
-    const completionRate = total > 0 ? ((completed / total) * 100).toFixed(0) : 0;
-    return { total, completed, pending, scheduled, completionRate };
-  }, [tasks]);
-
-
-  // =================================================================
-  // F. RENDER COMPONENTS - Logic
-  // =================================================================
-
-  const TodoList = () => {
-    
-    // Sort logic (client-side)
-    const sortedTasks = tasks.slice().sort((a, b) => {
-        // Sort by creation time (descending)
-        return b.createdAt - a.createdAt; 
-    });
-
+    // Client-side sorting applied to the stable 'sortedTasks' prop
     const pendingTasks = sortedTasks.filter(t => !t.completed).sort((a, b) => {
         // Secondary sort: Pending tasks ordered by scheduledDate ascending (earliest first)
         const dateA = a.scheduledDate || '9999-12-31'; // Put unscheduled tasks last
@@ -856,7 +487,6 @@ const App = () => {
         </div>
         
         {/* Render the isolated Task Generator Form */}
-        {/* The new onSubmitPrompt prop receives the string when the form submits */}
         <TaskGeneratorForm
             onSubmitPrompt={generateTasksFromPrompt}
             isGeneratingTasks={isGeneratingTasks}
@@ -897,9 +527,14 @@ const App = () => {
         </div>
       </div>
     );
-  };
+});
 
-  const CalendarView = () => {
+
+// =================================================================
+// 6. CALENDAR AND STATS COMPONENTS (No structural change needed)
+// =================================================================
+
+const CalendarView = React.memo(({ tasks }) => {
     const today = new Date();
     const [currentDate, setCurrentDate] = useState(today);
     
@@ -920,17 +555,18 @@ const App = () => {
     }, [tasks]);
 
     const getDayTasks = useCallback((day) => {
+        // The formatDate helper now ensures the string matches the local date of the cell
         const dayDate = formatDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
         return dateMap[dayDate] || [];
       }, [currentDate, dateMap]);
 
-    const changeMonth = (delta) => {
+    const changeMonth = useCallback((delta) => {
       setCurrentDate(prev => {
         const newDate = new Date(prev);
         newDate.setMonth(prev.getMonth() + delta);
         return newDate;
       });
-    };
+    }, []);
 
     const calendarCells = useMemo(() => {
         const cells = [];
@@ -942,6 +578,7 @@ const App = () => {
         // Fill day cells
         for (let day = 1; day <= daysInMonth; day++) {
           const tasksOnDay = getDayTasks(day);
+          // Check for today only against local date components
           const isToday = day === today.getDate() && currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear();
           
           cells.push(
@@ -990,9 +627,9 @@ const App = () => {
         </div>
       </div>
     );
-  };
+});
 
-  const DashboardStats = () => (
+const DashboardStats = React.memo(({ stats }) => (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-8">Productivity Dashboard</h1>
 
@@ -1026,8 +663,453 @@ const App = () => {
         </p>
       </div>
     </div>
-  );
+));
 
+
+// =================================================================
+// 7. MAIN APP COMPONENT
+// =================================================================
+
+const App = () => {
+  // --- Global State ---
+  const [tasks, setTasks] = useState([]);
+  const [viewMode, setViewMode] = useState('tasks'); // 'tasks', 'calendar', 'stats'
+  const [db, setDb] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // --- Music State ---
+  const [customPlaylistUrl, setCustomPlaylistUrl] = useState(DEFAULT_YT_PLAYLIST);
+  const [inputUrl, setInputUrl] = useState('');
+  const [isMusicSettingsOpen, setIsMusicSettingsOpen] = useState(false);
+  
+  // Memoized embed URL for the iframe
+  const embedUrl = useMemo(() => getEmbedUrl(customPlaylistUrl), [customPlaylistUrl]);
+
+  // --- Pomodoro State ---
+  const [timerStatus, setTimerStatus] = useState('stopped'); // 'stopped', 'running', 'paused'
+  const [sessionType, setSessionType] = useState('work'); // 'work', 'short-break', 'long-break'
+  const [timeLeft, setTimeLeft] = useState(WORK_TIME);
+  const [sessionCount, setSessionCount] = useState(0);
+
+  // --- Task Input State ---
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDate, setNewTaskDate] = useState(formatDate(new Date()));
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('add'); // 'add', 'edit'
+  const [editingTask, setEditingTask] = useState(null);
+
+  // --- Task Generation State ---
+  const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
+  const [generationError, setGenerationError] = useState(null);
+
+
+  // =================================================================
+  // A. FIREBASE INITIALIZATION AND AUTHENTICATION
+  // =================================================================
+
+  useEffect(() => {
+    if (!firebaseConfig) return;
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const firestore = getFirestore(app);
+      const authentication = getAuth(app);
+
+      setDb(firestore);
+      // NOTE: Authentication instance doesn't need to be set in state here, 
+      // but is used within the onAuthStateChanged listener below.
+
+      // 1. Sign in listener to get user ID
+      const unsubscribe = onAuthStateChanged(authentication, (user) => {
+        if (user) {
+          setUserId(user.uid);
+          // Once authenticated, load settings
+          loadUserSettings(firestore, user.uid);
+        } else {
+          // If no user and no custom token, sign in anonymously as a fallback
+          if (!initialAuthToken) {
+            signInAnonymously(authentication).catch(console.error);
+          }
+        }
+        setIsAuthReady(true);
+      });
+
+      // 2. Custom Token Sign-In (runs once on load)
+      const attemptSignIn = async () => {
+        if (initialAuthToken) {
+          await signInWithCustomToken(authentication, initialAuthToken).catch(console.error);
+        } else if (!authentication.currentUser) {
+          await signInAnonymously(authentication).catch(console.error);
+        }
+      };
+      attemptSignIn();
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Firebase initialization failed:", e);
+    }
+  }, []);
+
+  // =================================================================
+  // B. FIRESTORE REAL-TIME DATA SUBSCRIPTION & USER SETTINGS
+  // =================================================================
+
+  // Load User Settings (specifically music URL)
+  const loadUserSettings = useCallback(async (firestore, uid) => {
+    try {
+        const settingsDocRef = doc(firestore, `artifacts/${appId}/users/${uid}/settings`, 'music');
+        const docSnap = await getDoc(settingsDocRef);
+        if (docSnap.exists()) {
+            const savedUrl = docSnap.data().youtubeUrl;
+            if (savedUrl) {
+                setCustomPlaylistUrl(savedUrl);
+                setInputUrl(savedUrl); // Initialize input field with saved value
+            }
+        }
+    } catch (e) {
+        console.error("Error loading user settings:", e);
+    }
+  }, []);
+
+  // Save Music URL Setting (Memoized)
+  const saveMusicUrl = useCallback(async () => {
+    if (!db || !userId) return;
+    const urlToSave = getEmbedUrl(inputUrl) === DEFAULT_YT_PLAYLIST ? null : inputUrl; // Save null if using default or invalid URL
+    
+    try {
+        const settingsDocRef = doc(db, `artifacts/${appId}/users/${userId}/settings`, 'music');
+        await setDoc(settingsDocRef, { youtubeUrl: urlToSave }, { merge: true });
+        // Update the customPlaylistUrl state to trigger iframe source update *once*
+        setCustomPlaylistUrl(urlToSave || DEFAULT_YT_PLAYLIST); 
+        setIsMusicSettingsOpen(false);
+        // console.log("Music URL saved successfully.");
+    } catch (e) {
+        console.error("Error saving user settings:", e);
+    }
+  }, [db, userId, inputUrl]);
+
+
+  useEffect(() => {
+    if (!isAuthReady || !userId || !db) return;
+
+    const tasksCollectionPath = `artifacts/${appId}/users/${userId}/todos`;
+    const q = query(collection(db, tasksCollectionPath));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newTasks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Convert Firestore timestamp to milliseconds if present, else null (for sorting)
+        createdAt: doc.data().createdAt?.toMillis() || 0,
+        completedAt: doc.data().completedAt?.toMillis() || null,
+      }));
+      setTasks(newTasks);
+      // console.log(`Loaded ${newTasks.length} tasks for user ${userId}`);
+    }, (error) => {
+      console.error("Error fetching tasks:", error);
+    });
+
+    return () => unsubscribe();
+  }, [db, userId, isAuthReady]);
+
+  // =================================================================
+  // C. TASK MANAGEMENT & GENERATION LOGIC (All Memoized)
+  // =================================================================
+
+  const addTask = useCallback(async (title, scheduledDate) => {
+    if (!db || !userId || !title.trim()) {
+        console.error("AddTask Failed: Firestore DB not initialized or title empty.");
+        return;
+    }
+
+    try {
+      const tasksCollectionPath = `artifacts/${appId}/users/${userId}/todos`;
+      await addDoc(collection(db, tasksCollectionPath), {
+        title: title.trim(),
+        completed: false,
+        scheduledDate: scheduledDate,
+        createdAt: serverTimestamp(),
+      });
+      // console.log("Task added successfully.");
+    } catch (e) {
+      console.error("Error adding document: ", e);
+    }
+  }, [db, userId]);
+  
+  const addTasksBatch = useCallback(async (taskArray) => {
+      if (!db || !userId) {
+          console.error("Batch Add Failed: DB or User ID not initialized.");
+          return;
+      }
+      const tasksCollectionPath = `artifacts/${appId}/users/${userId}/todos`;
+      
+      const batchPromises = taskArray.map(task => 
+          addDoc(collection(db, tasksCollectionPath), {
+              title: task.title.trim(),
+              completed: false,
+              // Use provided date or today's date if date is missing or invalid
+              scheduledDate: task.scheduledDate && task.scheduledDate.match(/^\d{4}-\d{2}-\d{2}$/) 
+                             ? task.scheduledDate 
+                             : '',
+              createdAt: serverTimestamp(),
+          })
+      );
+
+      try {
+          await Promise.all(batchPromises);
+          // console.log(`Successfully added ${taskArray.length} tasks in batch.`);
+      } catch (e) {
+          console.error("Error during batch task addition:", e);
+          throw new Error("Failed to save all generated tasks to the database.");
+      }
+  }, [db, userId]); 
+
+
+  const generateTasksFromPrompt = useCallback(async (prompt) => {
+    if (!prompt.trim() || !db || !userId) return;
+
+    setIsGeneratingTasks(true);
+    setGenerationError(null);
+
+    const systemPrompt = "You are an expert project manager and productivity assistant. Your task is to break down the user's high-level goal into 5 to 8 concrete, actionable, small, and distinct sub-tasks. For each task, provide a concise title (max 10 words) and an optional scheduled date in YYYY-MM-DD format, or an empty string if a date is not applicable. Respond ONLY with the JSON array of tasks.";
+
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      generationConfig: { 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "ARRAY",
+          description: "A list of actionable tasks derived from the user's prompt.",
+          items: {
+            type: "OBJECT",
+            properties: {
+              title: { type: "STRING", description: "Concise title for the task (max 10 words)." },
+              scheduledDate: { type: "STRING", description: "Optional schedule date in YYYY-MM-DD format, or empty string." }
+            },
+            required: ["title"],
+            propertyOrdering: ["title", "scheduledDate"]
+          }
+        }
+      }
+    };
+
+    try {
+      const response = await fetchWithBackoff(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      const generatedJsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!generatedJsonText) {
+          throw new Error("Gemini returned no content or an invalid structure.");
+      }
+
+      // 1. Parse JSON
+      const generatedTasks = JSON.parse(generatedJsonText);
+
+      // 2. Validate and Save Tasks
+      if (Array.isArray(generatedTasks) && generatedTasks.length > 0) {
+        const validTasks = generatedTasks.filter(t => t.title && typeof t.title === 'string');
+        if (validTasks.length > 0) {
+            await addTasksBatch(validTasks);
+        } else {
+            throw new Error("Generated tasks were empty or invalid after parsing.");
+        }
+      } else {
+        throw new Error("Gemini response did not contain a valid array of tasks.");
+      }
+
+    } catch (e) {
+      console.error("Task generation failed:", e);
+      setGenerationError(e.message || "Failed to generate tasks. Please try again.");
+    } finally {
+      setIsGeneratingTasks(false);
+    }
+  }, [db, userId, addTasksBatch]); // Dependencies are stable
+
+  const updateTask = useCallback(async (taskId, newTitle, newScheduledDate) => {
+    if (!db || !userId || !taskId) return;
+
+    try {
+      const tasksDocPath = `artifacts/${appId}/users/${userId}/todos/${taskId}`;
+      await updateDoc(doc(db, tasksDocPath), {
+        title: newTitle.trim(),
+        scheduledDate: newScheduledDate,
+      });
+      setShowModal(false);
+      setEditingTask(null);
+    } catch (e) {
+      console.error("Error updating document: ", e);
+    }
+  }, [db, userId]);
+
+  const toggleTaskCompleted = useCallback(async (taskId, currentStatus) => {
+    if (!db || !userId || !taskId) return;
+
+    try {
+      const tasksDocPath = `artifacts/${appId}/users/${userId}/todos/${taskId}`;
+      await updateDoc(doc(db, tasksDocPath), {
+        completed: !currentStatus,
+        completedAt: !currentStatus ? serverTimestamp() : null
+      });
+    } catch (e) {
+      console.error("Error toggling task status: ", e);
+    }
+  }, [db, userId]);
+
+  const deleteTask = useCallback(async (taskId) => {
+    if (!db || !userId || !taskId) return;
+
+    try {
+      const tasksDocPath = `artifacts/${appId}/users/${userId}/todos/${taskId}`;
+      await deleteDoc(doc(db, tasksDocPath));
+    } catch (e) {
+      console.error("Error deleting document: ", e);
+    }
+  }, [db, userId]);
+
+  // Modal handlers
+  const handleModalSubmit = useCallback((e) => {
+    e.preventDefault();
+    if (modalType === 'add') {
+      addTask(newTaskTitle, newTaskDate);
+    } else if (modalType === 'edit' && editingTask) {
+      updateTask(editingTask.id, newTaskTitle, newTaskDate);
+    }
+  }, [modalType, newTaskTitle, newTaskDate, editingTask, addTask, updateTask]);
+
+  const openAddModal = useCallback(() => {
+    setModalType('add');
+    setNewTaskTitle('');
+    setNewTaskDate(formatDate(new Date()));
+    setEditingTask(null);
+    setShowModal(true);
+  }, []);
+
+  const openEditModal = useCallback((task) => {
+    setModalType('edit');
+    setNewTaskTitle(task.title);
+    // Ensure date is valid for input type="date"
+    setNewTaskDate(task.scheduledDate || formatDate(new Date())); 
+    setEditingTask(task);
+    setShowModal(true);
+  }, []);
+
+
+  // =================================================================
+  // D. POMODORO TIMER LOGIC (All Memoized)
+  // =================================================================
+
+  const getSessionDuration = useCallback((type) => {
+    switch (type) {
+      case 'work': return WORK_TIME;
+      case 'short-break': return SHORT_BREAK;
+      case 'long-break': return LONG_BREAK;
+      default: return WORK_TIME;
+    }
+  }, []);
+
+  const startTimer = useCallback(() => setTimerStatus('running'), []);
+  const pauseTimer = useCallback(() => setTimerStatus('paused'), []);
+
+  const resetTimer = useCallback(() => {
+    setTimerStatus('stopped');
+    setTimeLeft(getSessionDuration(sessionType));
+  }, [sessionType, getSessionDuration]);
+
+  const switchSession = useCallback(() => {
+    let nextType;
+    let nextCount = sessionCount;
+
+    if (sessionType === 'work') {
+      nextCount++;
+      if (nextCount % CYCLE_LENGTH === 0) {
+        nextType = 'long-break';
+      } else {
+        nextType = 'short-break';
+      }
+    } else {
+      nextType = 'work';
+    }
+
+    setSessionType(nextType);
+    setSessionCount(nextCount);
+    setTimeLeft(getSessionDuration(nextType));
+    setTimerStatus('stopped');
+  }, [sessionType, sessionCount, getSessionDuration]);
+
+
+  useEffect(() => {
+    if (timerStatus === 'running') {
+      const interval = setInterval(() => {
+        setTimeLeft((prevTime) => {
+          if (prevTime <= 1) {
+            switchSession();
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [timerStatus, switchSession]);
+
+  // =================================================================
+  // E. STATS CALCULATION (Memoized)
+  // =================================================================
+
+  const stats = useMemo(() => {
+    const total = tasks.length;
+    const completed = tasks.filter(t => t.completed).length;
+    const pending = total - completed;
+    const scheduled = tasks.filter(t => t.scheduledDate).length;
+    const completionRate = total > 0 ? ((completed / total) * 100).toFixed(0) : 0;
+    return { total, completed, pending, scheduled, completionRate };
+  }, [tasks]);
+  
+  // Tasks sorted for the TodoList (Memoized)
+  const sortedTasks = useMemo(() => {
+      return tasks.slice().sort((a, b) => {
+          // Sort by creation time (descending)
+          return b.createdAt - a.createdAt; 
+      });
+  }, [tasks]);
+
+
+  // =================================================================
+  // F. RENDER COMPONENTS - Logic
+  // =================================================================
+
+  const renderMainContent = () => {
+    switch (viewMode) {
+      case 'calendar':
+        return <CalendarView tasks={tasks} />;
+      case 'stats':
+        return <DashboardStats stats={stats} />;
+      case 'tasks':
+      default:
+        // Pass all stable props to the external TodoList component
+        return (
+            <TodoList 
+                sortedTasks={sortedTasks}
+                stats={stats}
+                openAddModal={openAddModal}
+                generateTasksFromPrompt={generateTasksFromPrompt}
+                isGeneratingTasks={isGeneratingTasks}
+                generationError={generationError}
+                toggleTaskCompleted={toggleTaskCompleted}
+                openEditModal={openEditModal}
+                deleteTask={deleteTask}
+            />
+        );
+    }
+  };
 
   // Memoize the Music Integration component instance to prevent re-rendering when only the timer updates
   const MemoizedMusicIntegration = useMemo(() => (
@@ -1042,20 +1124,25 @@ const App = () => {
     />
   ), [customPlaylistUrl, embedUrl, inputUrl, isMusicSettingsOpen, saveMusicUrl]);
 
+  // Memoize the Pomodoro Timer to prevent re-rendering of the entire element tree on App re-render, 
+  // ensuring only the props that change (timeLeft, timerStatus) cause updates.
+  const MemoizedPomodoroTimer = useMemo(() => (
+    <PomodoroTimer 
+        sessionType={sessionType}
+        timeLeft={timeLeft}
+        timerStatus={timerStatus}
+        startTimer={startTimer}
+        pauseTimer={pauseTimer}
+        resetTimer={resetTimer}
+        switchSession={switchSession}
+        sessionCount={sessionCount}
+    />
+  ), [sessionType, timeLeft, timerStatus, sessionCount, startTimer, pauseTimer, resetTimer, switchSession]);
 
 
-
-  const renderMainContent = () => {
-    switch (viewMode) {
-      case 'calendar':
-        return <CalendarView />;
-      case 'stats':
-        return <DashboardStats />;
-      case 'tasks':
-      default:
-        return <TodoList />;
-    }
-  };
+  // =================================================================
+  // G. MAIN LAYOUT RENDER
+  // =================================================================
 
   if (!isAuthReady) {
     return (
@@ -1099,20 +1186,10 @@ const App = () => {
           ))}
         </nav>
 
-        {/* Pomodoro Timer */}
-        <PomodoroTimer 
-            sessionType={sessionType}
-            timeLeft={timeLeft}
-            timerStatus={timerStatus}
-            startTimer={startTimer}
-            pauseTimer={pauseTimer}
-            resetTimer={resetTimer}
-            switchSession={switchSession}
-            sessionCount={sessionCount}
-            getSessionDuration={getSessionDuration}
-        />
+        {/* Pomodoro Timer (Memoized) */}
+        {MemoizedPomodoroTimer}
 
-        {/* Music Integration (Now Memoized) */}
+        {/* Music Integration (Memoized) */}
         {MemoizedMusicIntegration}
 
         {/* User Info for Debugging/Sharing */}
