@@ -10,15 +10,16 @@ import { Clock, CheckCircle, Circle, Calendar, List, Play, Pause, RotateCcw, Zap
 // 1. FIREBASE & AUTH SETUP (Mandatory Global Variables)
 // =================================================================
 
-// Hardcoded Firebase configuration provided by the user (used as a fallback if the environment doesn't inject __firebase_config)
+// IMPORTANT: ALL sensitive keys here are now placeholders to ensure the file is safe for GitHub.
+// The Canvas runtime provides the actual values via global variables.
 const HARDCODED_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCiuxg7AZ_A3lXGo86ZWROlSi4Oh4anQ8I",
-  authDomain: "todoapp-36817.firebaseapp.com",
-  projectId: "todoapp-36817",
-  storageBucket: "todoapp-36817.firebasestorage.app",
-  messagingSenderId: "328079058364",
-  appId: "1:328079058364:web:50e9bb424de6afe7c7f7b9",
-  measurementId: "G-RN54504F6M"
+  apiKey: "YOUR_FIREBASE_API_KEY_PLACEHOLDER",
+  authDomain: "your-project-id.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project-id.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:23456789012:web:abcdefg12345",
+  measurementId: "G-XXXXXXXXXX"
 };
 
 const firebaseConfig = typeof __firebase_config !== 'undefined'
@@ -35,8 +36,13 @@ const DEFAULT_YT_PLAYLIST = "https://www.youtube.com/embed/videoseries?list=PLQ_
 // 2. GEMINI API SETUP & HELPERS
 // =================================================================
 
-// Placeholder API Key - Canvas runtime will provide the actual key
-const GEMINI_API_KEY = ""; // Using empty string as instructed
+// FIX: Check for the environment variable (REACT_APP_GEMINI_API_KEY) for Vercel deployment.
+// If the variable exists (i.e., we are in Vercel), use it. Otherwise, use the empty string 
+// which is handled by the local Canvas environment's runtime injection.
+const GEMINI_API_KEY = (typeof process !== 'undefined' && process.env.REACT_APP_GEMINI_API_KEY)
+  ? process.env.REACT_APP_GEMINI_API_KEY
+  : ""; 
+
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
 
 
