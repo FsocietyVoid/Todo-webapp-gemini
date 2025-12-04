@@ -11,7 +11,6 @@ import { Clock, CheckCircle, Circle, Calendar, List, Play, Pause, RotateCcw, Zap
 // =================================================================
 
 // IMPORTANT: ALL sensitive keys here are now placeholders to ensure the file is safe for GitHub.
-// The Canvas runtime provides the actual values via global variables.
 const HARDCODED_FIREBASE_CONFIG = {
   apiKey: "YOUR_FIREBASE_API_KEY_PLACEHOLDER",
   authDomain: "your-project-id.firebaseapp.com",
@@ -22,9 +21,25 @@ const HARDCODED_FIREBASE_CONFIG = {
   measurementId: "G-XXXXXXXXXX"
 };
 
-const firebaseConfig = typeof __firebase_config !== 'undefined'
-  ? JSON.parse(__firebase_config)
-  : HARDCODED_FIREBASE_CONFIG;
+// FIX: Prioritize Vercel's environment variable (REACT_APP_FIREBASE_CONFIG)
+const firebaseConfig = (() => {
+  // 1. Check for Canvas global variable (local environment)
+  if (typeof __firebase_config !== 'undefined') {
+    return JSON.parse(__firebase_config);
+  }
+  // 2. Check for Vercel environment variable (deployed environment)
+  if (typeof process !== 'undefined' && process.env.REACT_APP_FIREBASE_CONFIG) {
+    try {
+      return JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG);
+    } catch (e) {
+      console.error("Error parsing REACT_APP_FIREBASE_CONFIG JSON:", e);
+      return HARDCODED_FIREBASE_CONFIG;
+    }
+  }
+  // 3. Fallback
+  return HARDCODED_FIREBASE_CONFIG;
+})();
+
 
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'minimal-todo-app';
@@ -715,7 +730,10 @@ const App = () => {
   // =================================================================
 
   useEffect(() => {
-    if (!firebaseConfig) return;
+    if (!firebaseConfig || firebaseConfig.apiKey === HARDCODED_FIREBASE_CONFIG.apiKey) {
+      console.error("Firebase config is missing or using placeholder values. Please set REACT_APP_FIREBASE_CONFIG on Vercel.");
+      return;
+    }
 
     try {
       const app = initializeApp(firebaseConfig);
