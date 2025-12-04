@@ -10,37 +10,20 @@ import { Clock, CheckCircle, Circle, Calendar, List, Play, Pause, RotateCcw, Zap
 // 1. FIREBASE & AUTH SETUP (Mandatory Global Variables)
 // =================================================================
 
-// IMPORTANT: These are placeholders. They MUST be overridden by REACT_APP_FIREBASE_CONFIG 
-// on Vercel or __firebase_config in Canvas for the app to function.
+// Hardcoded Firebase configuration provided by the user (used as a fallback if the environment doesn't inject __firebase_config)
 const HARDCODED_FIREBASE_CONFIG = {
-  apiKey: "", // Placeholder. Must be replaced by REACT_APP_FIREBASE_CONFIG in Vercel or __firebase_config in Canvas.
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
-  measurementId: ""
+  apiKey: "AIzaSyCiuxg7AZ_A3lXGo86ZWROlSi4Oh4anQ8I",
+  authDomain: "todoapp-36817.firebaseapp.com",
+  projectId: "todoapp-36817",
+  storageBucket: "todoapp-36817.firebasestorage.app",
+  messagingSenderId: "328079058364",
+  appId: "1:328079058364:web:50e9bb424de6afe7c7f7b9",
+  measurementId: "G-RN54504F6M"
 };
 
-// FIX: Prioritize Vercel's environment variable (REACT_APP_FIREBASE_CONFIG)
-const firebaseConfig = (() => {
-  // 1. Check for Canvas global variable (local environment)
-  if (typeof __firebase_config !== 'undefined') {
-    return JSON.parse(__firebase_config);
-  }
-  // 2. Check for Vercel environment variable (deployed environment)
-  if (typeof process !== 'undefined' && process.env.REACT_APP_FIREBASE_CONFIG) {
-    try {
-      return JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG);
-    } catch (e) {
-      console.error("Error parsing REACT_APP_FIREBASE_CONFIG JSON:", e);
-      return HARDCODED_FIREBASE_CONFIG;
-    }
-  }
-  // 3. Fallback
-  return HARDCODED_FIREBASE_CONFIG;
-})();
-
+const firebaseConfig = typeof __firebase_config !== 'undefined'
+  ? JSON.parse(__firebase_config)
+  : HARDCODED_FIREBASE_CONFIG;
 
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'minimal-todo-app';
@@ -52,13 +35,8 @@ const DEFAULT_YT_PLAYLIST = "https://www.youtube.com/embed/videoseries?list=PLQ_
 // 2. GEMINI API SETUP & HELPERS
 // =================================================================
 
-// FIX: Check for the environment variable (REACT_APP_GEMINI_API_KEY) for Vercel deployment.
-// If the variable exists (i.e., we are in Vercel), use it. Otherwise, use the empty string 
-// which is handled by the local Canvas environment's runtime injection.
-const GEMINI_API_KEY = (typeof process !== 'undefined' && process.env.REACT_APP_GEMINI_API_KEY)
-  ? process.env.REACT_APP_GEMINI_API_KEY
-  : ""; 
-
+// Placeholder API Key - Canvas runtime will provide the actual key
+const GEMINI_API_KEY = ""; // Using empty string as instructed
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
 
 
@@ -731,11 +709,7 @@ const App = () => {
   // =================================================================
 
   useEffect(() => {
-    // Check if configuration is missing or using the empty placeholder values
-    if (!firebaseConfig || !firebaseConfig.apiKey) {
-      console.error("Firebase config is missing or using placeholder values. Please set REACT_APP_FIREBASE_CONFIG on Vercel.");
-      return;
-    }
+    if (!firebaseConfig) return;
 
     try {
       const app = initializeApp(firebaseConfig);
