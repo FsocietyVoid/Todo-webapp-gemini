@@ -1,16 +1,92 @@
-# React + Vite
+Alright, here’s your README formatted clean and professional. No fluff, no drama, just the markdown you asked for.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+---
 
-Currently, two official plugins are available:
+# **Minimalist Focus Hub & AI Task Generator**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+A modern, single-page productivity dashboard built with **React** and **Vite**, merging Pomodoro-based focus cycles with real-time task tracking and AI-powered goal breakdown.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## **🛠️ Technology Stack**
 
-## Expanding the ESLint configuration
+This project uses a lightweight, modular architecture built around modern React patterns and cloud services.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### **Core Technologies**
+
+* **Frontend:** React + Vite
+* **Styling:** Tailwind CSS
+* **Database:** Google Cloud Firestore
+* **Authentication:** Firebase Auth
+* **AI Backend:** Gemini API (gemini-2.5-flash-preview-09-2025)
+
+---
+
+## **✨ Key Features**
+
+* **AI-Powered Task Generation**
+  Break down big goals into 5–8 actionable tasks using Gemini.
+
+* **Real-time To-Do List**
+  Tasks sync instantly using Firestore.
+
+* **Pomodoro Timer**
+  Classic 25-minute work timer with built-in break transitions.
+
+* **Focus Music**
+  Save and embed a custom YouTube URL.
+
+* **Dashboard + Calendar View**
+  Track stats and visualize upcoming tasks.
+
+---
+
+## **🚀 Local Development Setup**
+
+This setup gives you an optimized React + Vite environment with HMR.
+
+### **Clone the Repository**
+
+```sh
+git clone https://github.com/FsocietyVoid/Todo-webapp-gemini.git
+cd Todo-webapp-gemini
+```
+
+### **Install Dependencies**
+
+```sh
+npm install
+```
+
+### **Run Development Server**
+
+```sh
+npm run dev
+```
+
+---
+
+## **📦 Deployment & Environment Variables**
+
+To deploy (e.g., on Vercel), configure the following environment variables:
+
+| Variable               | Description                                      |
+| ---------------------- | ------------------------------------------------ |
+| `GEMINI_API_KEY`       | Required for AI task generation                  |
+| `__firebase_config`    | Complete Firebase config as a single JSON string |
+| `__initial_auth_token` | Used by hosting platform for persistent login    |
+| `__app_id`             | Unique application ID used for Firestore pathing |
+
+---
+
+## **📏 ESLint & Production Setup**
+
+If you plan to scale this project, consider:
+
+* Switching to **TypeScript**
+* Enabling **type-aware ESLint rules**
+* Using the TS template for smoother integration
+
+---
+
+If you want, I can turn this into a polished GitHub-style README with badges, screenshots, or an architecture diagram.
