@@ -1,7 +1,3 @@
-Alright, here’s your README formatted clean and professional. No fluff, no drama, just the markdown you asked for.
-
----
-
 # **Minimalist Focus Hub & AI Task Generator**
 
 A modern, single-page productivity dashboard built with **React** and **Vite**, merging Pomodoro-based focus cycles with real-time task tracking and AI-powered goal breakdown.
@@ -77,16 +73,4 @@ To deploy (e.g., on Vercel), configure the following environment variables:
 | `__initial_auth_token` | Used by hosting platform for persistent login    |
 | `__app_id`             | Unique application ID used for Firestore pathing |
 
----
 
-## **📏 ESLint & Production Setup**
-
-If you plan to scale this project, consider:
-
-* Switching to **TypeScript**
-* Enabling **type-aware ESLint rules**
-* Using the TS template for smoother integration
-
----
-
-If you want, I can turn this into a polished GitHub-style README with badges, screenshots, or an architecture diagram.
